@@ -1,6 +1,8 @@
 # j-text
 **Command line text editor**
 
+
+https://viewsourcecode.org/snaptoken/kilo/02.enteringRawMode.html
 https://maven.apache.org/guides/getting-started/maven-in-five-minutes.html
 xfce4-terminal
 
