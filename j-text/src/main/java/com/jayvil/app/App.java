@@ -1,5 +1,6 @@
 package com.jayvil.app;
 
+import java.io.IOException;
 import java.util.Arrays;
 
 import com.jayvil.app.LibC.Termios;
@@ -10,21 +11,37 @@ import com.sun.jna.Structure;
 
 public class App 
 {
+    private static LibC.Termios originalAttributes;
 
-//    public static void EnableRawMode(Termios t) {
-
-  //  }
-
-    public static void main( String[] args ) {
+    public static void enableRawMode() {
         LibC.Termios termios = new Termios();
         int returnCode = LibC.INSTANCE.tcgetattr(LibC.SYSTEM_OUT_FD, termios);
-
         if (returnCode != 0) {
             System.err.println("Error calling tcgetattr");
             System.exit(returnCode);    
         }
+        originalAttributes = LibC.Termios.clone(termios);
+        termios.c_iflag &= ~(LibC.IXON | LibC.ICRNL);
+        termios.c_oflag &= ~(LibC.OPOST);
+        termios.c_lflag &= ~(LibC.ECHO | LibC.ICANON |LibC.IEXTEN | LibC.ISIG);
+        
+        termios.c_cc[LibC.VMIN] = 0;
+        termios.c_cc[LibC.VTIME] = 1;
 
+        LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, termios);
         System.out.println("termios = " + termios);
+    }
+
+    public static void main( String[] args ) throws IOException {
+        enableRawMode();
+        while(true) {
+            int key = System.in.read();
+            if(key == 'q') {
+                LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, originalAttributes);
+                System.exit(0);
+            }
+            System.out.println((char) key + " (" + key + ")\r\n");
+        }
     }
 }
 
@@ -79,12 +96,13 @@ interface LibC extends Library {
 
         public Termios() {}
 
-        public static Termios copy(Termios termios) {
+        public static Termios clone(Termios termios) {
             Termios copy = new Termios();
             copy.c_iflag = termios.c_iflag;
             copy.c_oflag = termios.c_oflag;
             copy.c_cflag = termios.c_cflag;
             copy.c_lflag = termios.c_lflag;
+            System.arraycopy(termios.c_cc, 0, copy.c_cc, 0, copy.c_cc.length);
             return copy;
         }
 
