@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Arrays;
 
 import com.jayvil.app.LibC.Termios;
+import com.jayvil.app.LibC.WinSize;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 import com.sun.jna.Platform;
@@ -12,6 +13,19 @@ import com.sun.jna.Structure;
 public class App 
 {
     private static LibC.Termios originalAttributes;
+    private static int rows = 10;
+    private static int cols = 10;
+
+    public static void main( String[] args ) throws IOException {
+        enableRawMode();
+        initEditor();
+        while(true) {
+            refreshScreen();
+            int key = System.in.read();
+            handleKeyPress(key);
+            //System.out.print((char) key + " (" + key + ")\r\n");
+        }
+    }
 
     public static void enableRawMode() {
         LibC.Termios termios = new Termios();
@@ -21,8 +35,9 @@ public class App
             System.exit(returnCode);    
         }
         originalAttributes = LibC.Termios.clone(termios);
-        termios.c_iflag &= ~(LibC.IXON | LibC.ICRNL);
+        termios.c_iflag &= ~(LibC.BRKINT | LibC.ICRNL | LibC.INPCK | LibC.ISTRIP | LibC.IXON);
         termios.c_oflag &= ~(LibC.OPOST);
+        termios.c_cflag |= (LibC.CS8);
         termios.c_lflag &= ~(LibC.ECHO | LibC.ICANON |LibC.IEXTEN | LibC.ISIG);
         
         termios.c_cc[LibC.VMIN] = 0;
@@ -32,17 +47,53 @@ public class App
         System.out.println("termios = " + termios);
     }
 
-    public static void main( String[] args ) throws IOException {
-        enableRawMode();
-        while(true) {
-            int key = System.in.read();
-            if(key == 'q') {
-                LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, originalAttributes);
-                System.exit(0);
-            }
-            System.out.println((char) key + " (" + key + ")\r\n");
+    private static void refreshScreen() {
+        StringBuilder builder = new StringBuilder();
+        // Erase screen
+        builder.append("\033[2J");
+        // Reposition mouse in left corner
+        builder.append("\033[H");
+        for(int i = 0; i < rows-1; i++) {
+            builder.append("~\r\n");
         }
+        // Status bar
+        String statusMessage = "J-Text - v0.0.1";
+        builder.append("\033[7m")
+            .append(statusMessage)
+            .append(" ".repeat(Math.max(0, cols - statusMessage.length())))
+            .append("\033[0m");
+        builder.append("\033[H");
+        System.out.print(builder);
     }
+
+    private static LibC.WinSize getWinSize() {
+        final LibC.WinSize winSize = new WinSize();
+        final int rc = LibC.INSTANCE.ioctl(LibC.SYSTEM_OUT_FD, LibC.TIOCGWINSZ, winSize);
+        if (rc != 0) {
+            System.out.println("ioctl issue");
+            System.exit(rc);
+        }
+        return winSize;
+    }
+
+    private static void initEditor() {
+        LibC.WinSize winSize = getWinSize();
+        cols = winSize.ws_col;
+        rows = winSize.ws_row; 
+        System.out.print("Num rows = " + rows);
+        System.out.print("Num cols = " + cols); 
+    }
+
+    private static void handleKeyPress(int key) {
+        if(key == 'q') {
+            // Erase screen
+            System.out.print("\033[2J");
+            // Reposition mouse in left corner
+            System.out.print("\033[H");
+            LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, originalAttributes);
+            System.exit(0);
+        }
+    } 
 }
 
 
@@ -60,6 +111,7 @@ interface LibC extends Library {
     int IGNCR  = 200;   // Ignore CR (Carriage Return)
     int ICRNL  = 400;   // Map CR to NL on input
     int IXON   = 2000;  // Enable start/stop output control
+    int INPCK  = 20;    // Enable input parity check
 
     // c_oflag
     int OPOST  = 1;     // Post process output
@@ -117,7 +169,13 @@ interface LibC extends Library {
         }
     }
 
+    @Structure.FieldOrder(value = {"ws_row", "ws_col", "ws_xpixel", "ws_ypixel"})
+    class WinSize extends Structure {
+        public short ws_row, ws_col, ws_xpixel, ws_ypixel;
+        public WinSize() {};
+    }
+
     public int tcgetattr(int fd, Termios termios);
     public int tcsetattr(int fd, int optional_actions, Termios termios);
-
+    public int ioctl(int fd, int request, WinSize winSize);
 }
