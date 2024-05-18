@@ -2,6 +2,7 @@ package com.jayvil.app;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 import com.jayvil.app.LibC.Termios;
 import com.jayvil.app.LibC.WinSize;
@@ -13,15 +14,27 @@ import com.sun.jna.Structure;
 public class App 
 {
     private static LibC.Termios originalAttributes;
+    // Default rows and cols
     private static int rows = 10;
     private static int cols = 10;
+    private static final int ARROW_UP = 1000,
+                            ARROW_DOWN = 1001,
+                            ARROW_LEFT = 1002,
+                            ARROW_RIGHT = 1003,
+                            HOME = 1004,
+                            END = 1005,
+                            PAGEUP = 1006,
+                            PAGEDOWN = 1007,
+                            DEL = 1008;
+    private static int cursorXPos = 0, cursorYPos = 0;
+
 
     public static void main( String[] args ) throws IOException {
         enableRawMode();
         initEditor();
         while(true) {
             refreshScreen();
-            int key = System.in.read();
+            int key = readKey();
             handleKeyPress(key);
             //System.out.print((char) key + " (" + key + ")\r\n");
         }
@@ -62,7 +75,8 @@ public class App
             .append(statusMessage)
             .append(" ".repeat(Math.max(0, cols - statusMessage.length())))
             .append("\033[0m");
-        builder.append("\033[H");
+        // Update cursor to correct position
+        builder.append(String.format("\033[%d;%dH", cursorYPos+1, cursorXPos+1));
         System.out.print(builder);
     }
 
@@ -84,6 +98,58 @@ public class App
         System.out.print("Num cols = " + cols); 
     }
 
+    private static int readKey() throws IOException {
+        int key = System.in.read();
+        System.out.println((char)key + " " + key);
+        if (key != '\033') {
+            return key;
+        }
+        int nextKey = System.in.read();
+        if (nextKey != '[') {
+            return nextKey;
+        }
+        int anotherKey = System.in.read();
+        if (nextKey == '[') {
+            return switch (anotherKey) {
+                case 'A' -> ARROW_UP;
+                case 'B' -> ARROW_DOWN;
+                case 'C' -> ARROW_RIGHT;
+                case 'D' -> ARROW_LEFT;
+                case 'H' -> HOME;
+                case 'F' -> END;
+                case '0','1','2','3','4','5','6','7','8','9' -> { // ex esc[5~ PAGEUP
+                    int nextChar = System.in.read();
+                    if (nextChar != '~') {
+                        yield nextChar;
+                    }
+                    switch (nextChar) {
+                        case '1':
+                        case '7':
+                            yield HOME;
+                        case '3':
+                            yield DEL;
+                        case '4':
+                        case '8':
+                            yield END;
+                        case '5':
+                            yield PAGEUP;
+                        case '6':
+                            yield PAGEDOWN;
+                        default: yield nextChar;
+                    }
+                }
+                default -> anotherKey;
+            };
+        } else {
+            return switch (anotherKey) {
+                case 'H' -> HOME;
+                case 'F' -> END;
+                default -> anotherKey;
+            };
+        }
+        //return key;
+    }
+ 
     private static void handleKeyPress(int key) {
         if(key == 'q') {
             // Erase screen
@@ -92,8 +158,42 @@ public class App
             System.out.print("\033[H");
             LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, originalAttributes);
             System.exit(0);
+        } 
+        //else {
+            //System.out.print((char) + key + "-> (" + key + ")\r\n");
+        //}
+        // LDUR ;)
+        else if (List.of(ARROW_LEFT, ARROW_DOWN, ARROW_UP, ARROW_RIGHT).contains(key)) {
+            moveCursor(key);
         }
-    } 
+    }
+
+    private static void moveCursor(int key) {
+        switch (key) {
+            case ARROW_LEFT -> {
+                if ((cursorXPos > 0)) {
+                    cursorXPos--;
+                }
+            }
+            case ARROW_DOWN -> {
+                if (cursorYPos < rows-1 ) {
+                    cursorYPos++;
+                }
+            }
+            case ARROW_UP -> {
+                if (cursorYPos > 0) {
+                    cursorYPos--;
+                }
+            }
+            case ARROW_RIGHT -> {
+                if (cursorXPos < cols-1) {
+                    cursorXPos += 1;
+                }
+            }
+            case HOME -> cursorXPos = 0;
+            case END -> cursorYPos = cols-1;
+        } 
+    }
 }
 
 
