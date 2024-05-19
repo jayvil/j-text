@@ -1,8 +1,12 @@
 package com.jayvil.app;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.jayvil.app.LibC.Termios;
 import com.jayvil.app.LibC.WinSize;
@@ -27,9 +31,10 @@ public class App
                             PAGEDOWN = 1007,
                             DEL = 1008;
     private static int cursorXPos = 0, cursorYPos = 0;
-
+    private static List<String> content = List.of();
 
     public static void main( String[] args ) throws IOException {
+        openFile(args);
         enableRawMode();
         initEditor();
         while(true) {
@@ -40,6 +45,21 @@ public class App
         }
     }
 
+    private static void openFile(String[] args) {
+        if (args.length == 1) {
+            String filename = args[0];
+            //System.out.println(filename);
+            Path path = Path.of(filename);
+            if (Files.exists(path)) {
+                try (Stream<String> stream = Files.lines(path)){
+                    content = stream.collect(Collectors.toList());
+                    //System.out.println(content);
+                } catch (IOException e) {
+                    //TODO show exception in status bar
+                } 
+            }
+        }
+    }
     public static void enableRawMode() {
         LibC.Termios termios = new Termios();
         int returnCode = LibC.INSTANCE.tcgetattr(LibC.SYSTEM_OUT_FD, termios);
@@ -57,27 +77,52 @@ public class App
         termios.c_cc[LibC.VTIME] = 1;
 
         LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, termios);
-        System.out.println("termios = " + termios);
+        //System.out.println("termios = " + termios);
     }
 
     private static void refreshScreen() {
         StringBuilder builder = new StringBuilder();
+        eraseScreen(builder);
+        moveCursorToTopLeft(builder);
+        drawContent(builder);
+        drawStatusBar(builder);
+        drawCursor(builder);
+        System.out.print(builder);
+    }
+
+    private static void eraseScreen(StringBuilder builder) {
         // Erase screen
         builder.append("\033[2J");
+    }
+
+    private static void moveCursorToTopLeft(StringBuilder builder) {
         // Reposition mouse in left corner
         builder.append("\033[H");
+    }
+
+    private static void drawContent(StringBuilder builder) {
         for(int i = 0; i < rows-1; i++) {
-            builder.append("~\r\n");
+            if (i >= content.size()) {
+                builder.append("~");
+            } else {
+                builder.append(content.get(i));
+            }
+            builder.append("\033[K\r\n");
         }
+    }
+
+    private static void drawStatusBar(StringBuilder builder) {
         // Status bar
         String statusMessage = "J-Text - v0.0.1";
         builder.append("\033[7m")
             .append(statusMessage)
             .append(" ".repeat(Math.max(0, cols - statusMessage.length())))
             .append("\033[0m");
+    }
+
+    private static void drawCursor(StringBuilder builder) {
         // Update cursor to correct position
         builder.append(String.format("\033[%d;%dH", cursorYPos+1, cursorXPos+1));
-        System.out.print(builder);
     }
 
     private static LibC.WinSize getWinSize() {
@@ -100,7 +145,7 @@ public class App
 
     private static int readKey() throws IOException {
         int key = System.in.read();
-        System.out.println((char)key + " " + key);
+        //System.out.println((char)key + " " + key);
         if (key != '\033') {
             return key;
         }
