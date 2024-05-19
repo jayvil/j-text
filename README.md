@@ -1,7 +1,7 @@
 # j-text
-**Command line text editor**
+**A command line text editor**
 
-
+## Notes:
 - https://viewsourcecode.org/snaptoken/kilo/02.enteringRawMode.html
 - https://maven.apache.org/guides/getting-started/maven-in-five-minutes.html
 - https://solarianprogrammer.com/2019/04/08/c-programming-ansi-escape-codes-windows-macos-linux-terminals/
