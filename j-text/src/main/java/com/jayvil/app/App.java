@@ -42,8 +42,8 @@ public class App
             scroll();
             refreshScreen();
             int key = readKey();
-            handleKeyPress(key);
             //System.out.print((char) key + " (" + key + ")\r\n");
+            handleKeyPress(key);
         }
     }
 
@@ -168,7 +168,6 @@ public class App
 
     private static int readKey() throws IOException {
         int key = System.in.read();
-        //System.out.println((char)key + " " + key);
         if (key != '\033') {
             return key;
         }
@@ -190,7 +189,7 @@ public class App
                     if (nextChar != '~') {
                         yield nextChar;
                     }
-                    switch (nextChar) {
+                    switch (anotherKey) {
                         case '1':
                         case '7':
                             yield HOME;
@@ -237,7 +236,7 @@ public class App
             //System.out.print((char) + key + "-> (" + key + ")\r\n");
         //}
         // LDUR ;)
-        else if (List.of(ARROW_LEFT, ARROW_DOWN, ARROW_UP, ARROW_RIGHT).contains(key)) {
+        else if (List.of(ARROW_LEFT, ARROW_DOWN, ARROW_UP, ARROW_RIGHT, HOME, END).contains(key)) {
             moveCursor(key);
         }
     }
@@ -265,7 +264,7 @@ public class App
                 }
             }
             case HOME -> cursorXPos = 0;
-            case END -> cursorYPos = cols-1;
+            case END -> cursorXPos = cols-1;
         } 
     }
 }
