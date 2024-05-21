@@ -74,8 +74,7 @@ public class App
         termios.c_iflag &= ~(LibC.BRKINT | LibC.ICRNL | LibC.INPCK | LibC.ISTRIP | LibC.IXON);
         termios.c_oflag &= ~(LibC.OPOST);
         termios.c_cflag |= (LibC.CS8);
-        termios.c_lflag &= ~(LibC.ECHO | LibC.ICANON |LibC.IEXTEN | LibC.ISIG);
-       
+        termios.c_lflag &= ~(LibC.ECHO | LibC.ICANON |LibC.IEXTEN | LibC.ISIG | LibC.SIGTSTP);   
         // The min number of bytes of input needed before read() can return
         termios.c_cc[LibC.VMIN] = 0;
         // Sets the max amount of time to wait before read() returns
@@ -83,6 +82,7 @@ public class App
 
         if (LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, termios) != 0) {
             System.err.println("Error calling tcsetattr");
+            disableRawMode();
             System.exit(-1); 
         }
         //System.out.println("termios = " + termios);
@@ -217,10 +217,14 @@ public class App
         }
         //return key;
     }
- 
+
+    private static int ctrlKey(int key) {
+        return (key) & 0x1f;
+    }
+
     private static void handleKeyPress(int key) {
-        int ctrl_Q = key & 0x1f;
-        if(key == ctrl_Q) {
+        // Quit using CTRL + q
+        if(key == ctrlKey('q')) {
             // Erase screen
             System.out.print("\033[2J");
             // Reposition mouse in left corner
@@ -293,6 +297,7 @@ interface LibC extends Library {
     int ICANON = 2;      // Enable canonical mode
     int ISIG   = 1;      // when any of the characters INTR, QUIT, SUSP, or DSUSP are received gereate the corresponding signal
     int IEXTEN = 100000; // Enable implementation-defined input processing
+    int SIGTSTP = 20;
 
     // c_cflag
     int CSIZE  = 60;     // Character size mask. Values are CS5, CS6, CS7, CS8
