@@ -19,25 +19,27 @@ public class App
 {
     private static LibC.Termios originalAttributes;
     // Default rows and cols
-    private static int rows = 10;
-    private static int cols = 10;
+    private static int rows = 10, cols = 10;
     private static final int ARROW_UP = 1000,
                             ARROW_DOWN = 1001,
                             ARROW_LEFT = 1002,
                             ARROW_RIGHT = 1003,
-                            HOME = 1004,
-                            END = 1005,
-                            PAGEUP = 1006,
+                            HOME = 1004, END = 1005, PAGEUP = 1006,
                             PAGEDOWN = 1007,
                             DEL = 1008;
+    // Used to keep track of the size of the window
     private static int cursorXPos = 0, cursorYPos = 0;
+    // File content rows stored as a list
     private static List<String> content = List.of();
+    // Keep track of what row of the file the user is currently scrolled to
+    private static int rowOffset = 0;
 
     public static void main( String[] args ) throws IOException {
         openFile(args);
         enableRawMode();
         initEditor();
         while(true) {
+            scroll();
             refreshScreen();
             int key = readKey();
             handleKeyPress(key);
@@ -60,26 +62,35 @@ public class App
             }
         }
     }
+
     public static void enableRawMode() {
         LibC.Termios termios = new Termios();
         int returnCode = LibC.INSTANCE.tcgetattr(LibC.SYSTEM_OUT_FD, termios);
-        if (returnCode != 0) {
+        if (LibC.INSTANCE.tcgetattr(LibC.SYSTEM_OUT_FD, termios) != 0) {
             System.err.println("Error calling tcgetattr");
-            System.exit(returnCode);    
+            System.exit(-1);    
         }
         originalAttributes = LibC.Termios.clone(termios);
         termios.c_iflag &= ~(LibC.BRKINT | LibC.ICRNL | LibC.INPCK | LibC.ISTRIP | LibC.IXON);
         termios.c_oflag &= ~(LibC.OPOST);
         termios.c_cflag |= (LibC.CS8);
         termios.c_lflag &= ~(LibC.ECHO | LibC.ICANON |LibC.IEXTEN | LibC.ISIG);
-        
+       
+        // The min number of bytes of input needed before read() can return
         termios.c_cc[LibC.VMIN] = 0;
+        // Sets the max amount of time to wait before read() returns
         termios.c_cc[LibC.VTIME] = 1;
 
-        LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, termios);
+        if (LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, termios) != 0) {
+            System.err.println("Error calling tcsetattr");
+            System.exit(-1); 
+        }
         //System.out.println("termios = " + termios);
     }
 
+    private static void disableRawMode() {
+        LibC.INSTANCE.tcsetattr(LibC.STDIN_FILENO, LibC.TCSAFLUSH, originalAttributes);
+    }
     private static void refreshScreen() {
         StringBuilder builder = new StringBuilder();
         eraseScreen(builder);
@@ -101,11 +112,12 @@ public class App
     }
 
     private static void drawContent(StringBuilder builder) {
-        for(int i = 0; i < rows-1; i++) {
-            if (i >= content.size()) {
+        for(int i = 0; i < rows; i++) {
+            int fileIndex = rowOffset + i;
+            if (fileIndex >= content.size()) {
                 builder.append("~");
             } else {
-                builder.append(content.get(i));
+                builder.append(content.get(fileIndex));
             }
             builder.append("\033[K\r\n");
         }
@@ -113,7 +125,7 @@ public class App
 
     private static void drawStatusBar(StringBuilder builder) {
         // Status bar
-        String statusMessage = "J-Text - v0.0.1";
+        String statusMessage = "J-Text - v0.0.1 Rows: " + rows + " X: " + cursorXPos + " Y: " + cursorYPos;
         builder.append("\033[7m")
             .append(statusMessage)
             .append(" ".repeat(Math.max(0, cols - statusMessage.length())))
@@ -122,13 +134,14 @@ public class App
 
     private static void drawCursor(StringBuilder builder) {
         // Update cursor to correct position
-        builder.append(String.format("\033[%d;%dH", cursorYPos+1, cursorXPos+1));
+        builder.append(String.format("\033[%d;%dH", cursorYPos - rowOffset + 1, cursorXPos+1));
     }
 
     private static LibC.WinSize getWinSize() {
         final LibC.WinSize winSize = new WinSize();
+        // TODO: ioctl may not work on all terminals. Update to have fallback method of getting rows, cols
         final int rc = LibC.INSTANCE.ioctl(LibC.SYSTEM_OUT_FD, LibC.TIOCGWINSZ, winSize);
-        if (rc != 0) {
+        if (rc != 0 || winSize.ws_col == 0) {
             System.out.println("ioctl issue");
             System.exit(rc);
         }
@@ -138,9 +151,19 @@ public class App
     private static void initEditor() {
         LibC.WinSize winSize = getWinSize();
         cols = winSize.ws_col;
-        rows = winSize.ws_row; 
+        // Leave room for status row at the bottom
+        rows = winSize.ws_row-1;
         System.out.print("Num rows = " + rows);
         System.out.print("Num cols = " + cols); 
+    }
+
+    private static void scroll() {
+        if (cursorYPos >= rows + rowOffset) {
+            rowOffset = cursorYPos - rows + 1;
+        }
+        else if (cursorYPos < rowOffset) {
+            rowOffset = cursorYPos;
+        }
     }
 
     private static int readKey() throws IOException {
@@ -196,12 +219,14 @@ public class App
     }
  
     private static void handleKeyPress(int key) {
-        if(key == 'q') {
+        int ctrl_Q = key & 0x1f;
+        if(key == ctrl_Q) {
             // Erase screen
             System.out.print("\033[2J");
             // Reposition mouse in left corner
             System.out.print("\033[H");
-            LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, originalAttributes);
+            //LibC.INSTANCE.tcsetattr(LibC.SYSTEM_OUT_FD, LibC.TCSAFLUSH, originalAttributes);
+            disableRawMode();
             System.exit(0);
         } 
         //else {
@@ -221,7 +246,7 @@ public class App
                 }
             }
             case ARROW_DOWN -> {
-                if (cursorYPos < rows-1 ) {
+                if (cursorYPos < content.size()) {
                     cursorYPos++;
                 }
             }
@@ -246,6 +271,7 @@ public class App
 interface LibC extends Library {
 
     int SYSTEM_OUT_FD = 1;
+    int STDIN_FILENO = 0;
 
     // c_iflag
     int IGNBRK = 1;     // Ignore break condition
