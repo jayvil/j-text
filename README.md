@@ -1,8 +1,8 @@
 # j-text
 **A command line text editor** <br>
 
-|-----------|---------------|
 |**Command**|**Description**|
+|-----------|---------------|
 | Crtl + q  | quit editor   |
 |-----------|---------------|
 
