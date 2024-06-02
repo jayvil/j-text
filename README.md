@@ -1,6 +1,9 @@
 # j-text
 **A command line text editor**
-
+||
+|**Command**|**Description**|
+| Crtl + q  | quit editor   |
+||
 ## Notes:
 - https://viewsourcecode.org/snaptoken/kilo/02.enteringRawMode.html
 - https://maven.apache.org/guides/getting-started/maven-in-five-minutes.html
