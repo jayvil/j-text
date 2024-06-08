@@ -39,7 +39,7 @@ public class App
         enableRawMode();
         initEditor();
         while(true) {
-            scroll();
+            verticalScroll();
             refreshScreen();
             int key = readKey();
             //System.out.print((char) key + " (" + key + ")\r\n");
@@ -157,13 +157,17 @@ public class App
         System.out.print("Num cols = " + cols); 
     }
 
-    private static void scroll() {
+    private static void verticalScroll() {
         if (cursorYPos >= rows + rowOffset) {
             rowOffset = cursorYPos - rows + 1;
         }
         else if (cursorYPos < rowOffset) {
             rowOffset = cursorYPos;
         }
+    }
+
+    private void horizontalScroll() {
+        // TODO implement
     }
 
     private static int readKey() throws IOException {
@@ -236,7 +240,7 @@ public class App
             //System.out.print((char) + key + "-> (" + key + ")\r\n");
         //}
         // LDUR ;)
-        else if (List.of(ARROW_LEFT, ARROW_DOWN, ARROW_UP, ARROW_RIGHT, HOME, END).contains(key)) {
+        else if (List.of(ARROW_LEFT, ARROW_DOWN, ARROW_UP, ARROW_RIGHT, HOME, END, PAGEUP, PAGEDOWN).contains(key)) {
             moveCursor(key);
         }
     }
@@ -249,7 +253,7 @@ public class App
                 }
             }
             case ARROW_DOWN -> {
-                if (cursorYPos < content.size()) {
+                if (cursorYPos < content.size()-1) {
                     cursorYPos++;
                 }
             }
@@ -261,6 +265,22 @@ public class App
             case ARROW_RIGHT -> {
                 if (cursorXPos < cols-1) {
                     cursorXPos += 1;
+                }
+            }
+            case PAGEUP, PAGEDOWN -> {
+                if (key == PAGEUP) {
+                    // Anchor cursor to top right of screen
+                    cursorYPos = rowOffset;
+                } else {
+                    // Anchor cursor to bottom right of screen
+                    cursorYPos = rowOffset + rows - 1;
+                    if (cursorYPos > content.size()) {
+                        cursorYPos = content.size();
+                    }
+                }
+
+                for (int i = 0; i<rows; i++) {
+                    moveCursor(key == PAGEUP ? ARROW_UP : ARROW_DOWN);
                 }
             }
             case HOME -> cursorXPos = 0;
